@@ -1,23 +1,56 @@
-#vmcloud.pl
-$vCenter  = "vCenter server IP/vCenter server name"
-$tableProperties = "<style>"
-$tableProperties = $tableProperties + "TABLE{border-width: 1px;border-style: solid;border-color: black;}"
-$tableProperties = $tableProperties + "TH{border-width: 1px;padding: 5px;border-style: solid;border-color: black;}"
-$tableProperties = $tableProperties + "TD{text-align:center;border-width: 1px;padding: 5px;border-style: solid;border-color: black;}"
-$tableProperties = $tableProperties + "</style>"
- 
-#Main section of check
-Write-Host "Looking for snapshots"
-$date = get-date
-$datefile = get-date -uformat '%m-%d-%Y-%H%M%S'
-$filename = "c:\temp\VMwareSnapshots_" + $datefile + ".htm"
-  
-#Get your list of VMs
-Connect-VIServer $vCenter
-$ss = Get-vm | Get-Snapshot
-Write-Host "   Complete" -ForegroundColor Green
-Write-Host "Generating snapshot report"
-$ss | Select-Object vm, name, description, @{Label="Size";Expression={"{0:N2} GB" -f ($_.SizeGB)}}, Created, powerstate| sort-object Created| ConvertTo-HTML -head $tableProperties -body "<th><font style = `"color:
-#FFFFFF`"><big> Snapshots Report</big></font></th> <br></br> <style type=""text/css""> body{font: .8em ""Lucida Grande"", Tahoma, Arial, Helvetica, sans-serif;} ol{margin:0;padding: 0 1.5em;} table{color:#FFF;background:#1464AB;border-collapse:collapse;width:647px;border:5px solid #12548E;} thead{} thead th{padding:1em 1em .5em;border-bottom:1px dotted #FFF;font-size:120%;text-align:left;} thead tr{} td{padding:.5em 1em;} tbody tr.odd td{background:transparent url(tr_bg.png) repeat top left;} tfoot{} tfoot td{padding-bottom:1.5em;} tfoot tr{} * html tr.odd td{background:#1464AB;filter: progid:DXImageTransform.Microsoft.AlphaImageLoader(src='tr_bg.png', sizingMethod='scale');} #middle{background-color:#095292;} </style> <body BGCOLOR=""#333333""> <table border=""1"" cellpadding=""5""> <table> <tbody> </tbody> </table> </body>" | Out-File $filename
-Write-Host "   Complete" -ForegroundColor Green
-Write-Host "Your snapshot report has been saved to:" $filename
+# vmcloud.pl
+# Connect to vCenter Server
+Connect-VIServer <vCenter_IP>
+
+# Get all VMs
+$VMs = Get-VM
+
+# Create empty array to hold snapshot information
+$SnapshotInfo = @()
+
+# Loop through each VM and get snapshot information
+foreach ($VM in $VMs) {
+    $Snapshots = Get-Snapshot -VM $VM
+
+    # Loop through each snapshot and add information to array
+    foreach ($Snapshot in $Snapshots) {
+        $SnapshotInfo += [PSCustomObject]@{
+            VMName = $VM.Name
+            SnapshotName = $Snapshot.Name
+            Created = $Snapshot.Created
+            Description = $Snapshot.Description
+            SizeGB = [math]::Round(($Snapshot.SizeGB),2)
+        }
+    }
+}
+
+# Create HTML output
+$HTML = @"
+<html>
+<head>
+<title>Snapshots Report</title>
+<style>
+    body {background-color: #D3D3D3;}
+    table {border: 3px solid black; border-collapse: collapse; font-size: 14px; font-family: Arial, sans-serif; background-color: #3B3B3B; color: white; max-width: 800px;}
+    th, td {border: 2px solid black; padding: 10px; text-align: left; width: auto;}
+    th {background-color: #2F4F4F; font-weight: bold;}
+</style>
+</head>
+<body>
+"@
+$HTML += $SnapshotInfo | ConvertTo-Html -Fragment -Property VMName, SnapshotName, Created, Description, SizeGB
+$HTML += @"
+</body>
+</html>
+"@
+
+# Output HTML to file
+$FilePath = "C:\temp\SnapshotInfo.html"
+$HTML | Out-File -FilePath $FilePath
+
+# Output confirmation message
+Write-Host "Generating Snapshots Report"
+Write-Host "Your snapshots report has been saved to: $FilePath"
+
+# Disconnect from vCenter Server
+Disconnect-VIServer -Confirm:$false
